@@ -443,7 +443,7 @@ def _compute_abased_thal_parc(t1, vol_tparc, deriv_dir, subjid, aseg_nii, out_st
     defFile = os.path.join(stransf_dir, subjid + '_space-MNI152NLin2009cAsym_')
     if not os.path.isfile(defFile + 'desc-t12mni_1InverseWarp.nii.gz'):
         # Registration to MNI template
-        subprocess.run(['antsRegistrationSyNQuick.sh', '-d', '3', '-f', t1_temp, '-m', t1, '-t', 's',
+        subprocess.run(['antsRegistrationSyN.sh', '-d', '3', '-f', t1_temp, '-m', t1, '-t', 's',
                         '-o', defFile + 'desc-t12mni_'],
                         stdout=subprocess.PIPE, universal_newlines=True)
 
