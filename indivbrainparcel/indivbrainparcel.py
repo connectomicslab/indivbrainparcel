@@ -135,6 +135,11 @@ def _build_args_parser():
     requiredNamed.add_argument('--mixwm', '-m', action='store_true', required=False, default=False,
                                 help="R| Mix the cortical WM growing with the cortical GM. This will be used to extend the cortical GM inside the WM. \n"
                                     "\n")
+    requiredNamed.add_argument('--remwm', '-rw', action='store_true', required=False, default=False,
+                                help="R| Remove the white matter. Set the white matter to 0.  \n"
+                                    " This option will not remove the labelled white matter")
+
+    
     p.add_argument('--verbose', '-v', action='store', required=False,
                     type=int, nargs=1,
                     help='verbosity level: 1=low; 2=debug')
@@ -155,59 +160,6 @@ def _build_args_parser():
 
     return p
 
-
-def _print_availab_parcels(reg_name=None):
-
-    data = _load_parctype_json()
-
-    if reg_name is None:
-        supra_keys = data.keys()
-        parc_help = ''
-        for sup in supra_keys:
-            parc_opts = data[sup]
-            parc_help = '{} "{}:\n"'.format(parc_help, sup)
-            print(sup + ':')
-            for opts in parc_opts:
-                desc = data[sup][opts]["Atlas"]
-                cita = data[sup][opts]["Citation"]
-                parc_help = '{} "{}: {} {}\n"'.format(parc_help, opts, desc, cita)
-                print('     {}: {} {}'.format(opts, desc, cita))
-            print('')
-    else:
-        parc_opts = data[reg_name]
-        print(reg_name + ':')
-        for opts in parc_opts:
-            desc = data[reg_name][opts]["Atlas"]
-            cita = data[reg_name][opts]["Citation"]
-            print('     {}: {} {}'.format(opts, desc, cita))
-        print('')
-
-
-def _get_region_features(im_parc, st_codes, st_names, st_red, st_green, st_blue):
-
-    # Extract the code, name and RGB triplet from colorLUT file for the structures appearing in the image im_parc
-    temp    = np.unique(im_parc)
-    ind_non = np.nonzero(temp)
-    temp    = temp[ind_non[0]]
-    temp    = temp.astype(int)
-    pos     = search(st_codes, temp)
-
-    reg_codes = list(itemgetter(*pos)(st_codes))
-    reg_names = list(itemgetter(*pos)(st_names))
-    reg_red   = list(itemgetter(*pos)(st_red))
-    reg_green = list(itemgetter(*pos)(st_green))
-    reg_blue  = list(itemgetter(*pos)(st_blue))
-
-    return reg_codes, reg_names, reg_red, reg_green, reg_blue
-
-
-def _my_ismember(a, b):
-
-    values, indices = np.unique(a, return_inverse=True)
-    is_in_list = np.isin(a, b)
-    idx = indices[is_in_list].astype(int)
-
-    return values, idx
 
 def _parc_tsv_table(codes, names, colors, tsv_filename):
     # Table for parcellation
@@ -256,52 +208,6 @@ def rgb2hex(r, g, b):
 
 def hex2rgb(hexcode):
     return tuple(map(ord, hexcode[1:].decode('hex')))
-
-
-def _find_images_in_path(new_path, str_ext):
-    # This function finds images in a folder that contain certain string in its file name
-    temp_var = glob(new_path + os.path.sep + str_ext)
-
-    return temp_var
-
-
-
-def _select_t1s(t1s, t1file):
-
-    with open(t1file) as file:
-        t1s2run = [line.rstrip() for line in file]
-
-    out_t1s = [s for s in t1s if any(xs in s for xs in t1s2run)]
-
-    return out_t1s
-
-
-def tissue_seg_table(tsv_filename):
-    # Table for tissue segmentation
-    # 1. Default values for tissues segmentation table
-    seg_rgbcol = np.array([[172, 0, 0], [0, 153, 76], [0, 102, 204]])
-    seg_codes = np.array([1, 2, 3])
-    seg_names = ['cerebro_spinal_fluid', 'gray_matter', 'white_matter']
-    seg_acron = ['CSF', 'GM', 'WM']
-
-    # 2. Converting colors to hexidecimal string
-    seg_hexcol = []
-    nrows, ncols = seg_rgbcol.shape
-    for i in np.arange(0, nrows):
-        seg_hexcol.append(rgb2hex(seg_rgbcol[i, 0], seg_rgbcol[i, 1], seg_rgbcol[i, 2]))
-
-    bids_df = pd.DataFrame(
-        {
-            'index': seg_codes,
-            'name': seg_names,
-            'abbreviation': seg_acron,
-            'color': seg_hexcol
-        }
-    )
-    # Save the tsv table
-    with open(tsv_filename, 'w+') as tsv_file:
-        tsv_file.write(bids_df.to_csv(sep='\t', index=False))
-
 
 def read_fscolorlut(lutFile):
     # Readind a color LUT file
@@ -389,17 +295,18 @@ def _launch_surf2vol(fssubj_dir, out_dir, fullid, atlas, gm_grow):
     for g in gm_grow:
         out_vol = os.path.join(out_dir, fullid + '_space-orig_' + atlas_str + 'grow' + g + 'mm_dseg.nii.gz')
 
-        if g == '0':
-            # Creating the volumetric parcellation using the annot files
-            subprocess.run(['mri_aparc2aseg', '--s', fullid, '--annot', atlas,
-                            '--hypo-as-wm', '--new-ribbon', '--o', out_vol],
-                            stdout=subprocess.PIPE, universal_newlines=True)
+        if not os.path.isfile(out_vol):
+            if g == '0':
+                # Creating the volumetric parcellation using the annot files
+                subprocess.run(['mri_aparc2aseg', '--s', fullid, '--annot', atlas,
+                                '--hypo-as-wm', '--new-ribbon', '--o', out_vol],
+                                stdout=subprocess.PIPE, universal_newlines=True)
 
-        else:
-            # Creating the volumetric parcellation using the annot files
-            subprocess.run(['mri_aparc2aseg', '--s', fullid, '--annot', atlas, '--wmparc-dmax', g, '--labelwm',
-                            '--hypo-as-wm', '--new-ribbon', '--o', out_vol],
-                            stdout=subprocess.PIPE, universal_newlines=True)
+            else:
+                # Creating the volumetric parcellation using the annot files
+                subprocess.run(['mri_aparc2aseg', '--s', fullid, '--annot', atlas, '--wmparc-dmax', g, '--labelwm',
+                                '--hypo-as-wm', '--new-ribbon', '--o', out_vol],
+                                stdout=subprocess.PIPE, universal_newlines=True)
 
 
         # Moving the resulting parcellation from conform space to native
@@ -411,13 +318,6 @@ def _launch_surf2vol(fssubj_dir, out_dir, fullid, atlas, gm_grow):
         out_parc.append(out_vol)
 
     return out_parc
-
-def _parc_conform2native(cform_mgz, nat_nii, fssubj_dir, fullid):
-    # Moving the resulting parcellation from conform space to native
-    raw_vol = os.path.join(fssubj_dir, fullid, 'mri', 'rawavg.mgz')
-    subprocess.run(['mri_vol2vol', '--mov', cform_mgz, '--targ', raw_vol,
-                    '--regheader', '--o', nat_nii, '--no-save-reg', '--interp', 'nearest'],
-                    stdout=subprocess.PIPE, universal_newlines=True)
 
 def _compute_abased_thal_parc(t1, vol_tparc, deriv_dir, subjid, aseg_nii, out_str):
 
@@ -811,7 +711,7 @@ class CorticalParcellation:
 
 
 # def _build_parcellation(layout, bids_dir, deriv_dir, ent_dict, parccode):
-def _build_parcellation(fssubj_dir, subjid, growwm, out_dir, bool_mixwm):
+def _build_parcellation(fssubj_dir, subjid, growwm, out_dir, bool_mixwm, bool_rmwm):
 
     # if fssubj_dir finishes with a / then remove it
     if fssubj_dir[-1] == os.path.sep:
@@ -1282,9 +1182,12 @@ def _build_parcellation(fssubj_dir, subjid, growwm, out_dir, bool_mixwm):
                 out_atlas[ind[0], ind[1], ind[2]] = temp_iparc[ind[0], ind[1], ind[2]] + np.ones((len(ind[0]),)) * nroi_right
 
                 if  bool_mixwm:
-                    ind      = np.where(np.logical_and(out_atlas > 3000))
+                    ind      = np.where(out_atlas > 3000)
                     out_atlas[ind[0], ind[1], ind[2]] = out_atlas[ind[0], ind[1], ind[2]] - 3000
 
+                if  bool_rmwm:
+                    ind      = np.where(out_atlas == 3000)
+                    out_atlas[ind[0], ind[1], ind[2]] = out_atlas[ind[0], ind[1], ind[2]] - 3000
 
                 fname            = os.path.basename(gparc)
                 templist         = fname.split('_')
@@ -1347,7 +1250,8 @@ def main():
     nthreads     = int(args.nthreads[0])
     growwm       = growwm.split(',')
     bool_mixwm   = args.mixwm
-
+    bool_rmwm    = args.mixwm
+    
     if isinstance(args.outdir, list):
         out_dir      = args.outdir[0]
     else:
@@ -1368,7 +1272,7 @@ def main():
             _printprogressbar(i + 1, nsubj,
                     'Processing T1w --> ' + subjid + ': ' + '(' + str(i + 1) + '/' + str(nsubj) + ')')
                     # _build_parcellation(layout, bids_dir, deriv_dir, ent_dict, parccode)
-            _build_parcellation(fssubj_dir, subjid, growwm, out_dir, bool_mixwm)
+            _build_parcellation(fssubj_dir, subjid, growwm, out_dir, bool_mixwm, bool_rmwm)
     else:
         start_time = time.perf_counter()
         ncores = os.cpu_count()
@@ -1378,7 +1282,7 @@ def main():
         with concurrent.futures.ProcessPoolExecutor(ncores) as executor:
         #     results = [executor.submit(do_something, sec) for sec in secs]
             results = list(executor.map(_build_parcellation, [fssubj_dir] * nsubj, subjids,
-             [growwm] * nsubj, [out_dir] * nsubj), [bool_mixwm] * nsubj)
+             [growwm] * nsubj, [out_dir] * nsubj), [bool_mixwm] * nsubj, [bool_rmwm] * nsubj)
 
         end_time = time.perf_counter()
 
