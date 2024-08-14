@@ -343,7 +343,7 @@ def _compute_abased_thal_parc(t1, vol_tparc, deriv_dir, subjid, aseg_nii, out_st
     defFile = os.path.join(stransf_dir, subjid + '_space-MNI152NLin2009cAsym_')
     if not os.path.isfile(defFile + 'desc-t12mni_1InverseWarp.nii.gz'):
         # Registration to MNI template
-        subprocess.run(['antsRegistrationSyN.sh', '-d', '3', '-f', t1_temp, '-m', t1, '-t', 's',
+        subprocess.run(['antsRegistrationSyNQuick.sh', '-d', '3', '-f', t1_temp, '-m', t1, '-t', 's',
                         '-o', defFile + 'desc-t12mni_'],
                         stdout=subprocess.PIPE, universal_newlines=True)
 
@@ -747,7 +747,14 @@ def _build_parcellation(fssubj_dir, subjid, growwm, out_dir, bool_mixwm, bool_rm
         sys.exit()
     else:
         if out_dir is None:
-            out_dir = os.path.join(os.path.dirname(fssubj_dir), 'derivatives')
+            temp = os.path.dirname(fssubj_dir)
+            
+            if os.path.basename(temp) != 'derivatives':
+                out_dir = os.path.join(temp, 'derivatives')
+            else:
+                out_dir = temp
+            
+            
 
         surfatlas_dir = os.path.join(out_dir, cort_dict["OutSurfLocation"], subjid, 'anat')
         volatlas_dir  = os.path.join(out_dir, cort_dict["OutVolLocation"], subjid, 'anat')
