@@ -328,12 +328,15 @@ def _compute_abased_thal_parc(t1, vol_tparc, deriv_dir, subjid, aseg_nii, out_st
 
     # Cortical atlas directory
 
+    subjid_ent = subjid.split('_')
+    subj_id = subjid_ent[0]
+    ses_id = subjid_ent[1]
     
     thal_spam = os.path.join(data_dir, 'thalamic_nuclei_MIALatlas', 'Thalamus_Nuclei-HCP-4DSPAMs.nii.gz')
     t1_temp = os.path.join(data_dir, 'mni_icbm152_t1_tal_nlin_asym_09c', 'mni_icbm152_t1_tal_nlin_asym_09c.nii.gz')
 
     # Creating spatial transformation folder
-    stransf_dir = os.path.join(deriv_dir, 'ants-transf2mni', subjid, 'anat')
+    stransf_dir = os.path.join(deriv_dir, 'ants-transf2mni', subj_id, ses_id, 'anat')
     if not os.path.isdir(stransf_dir):
         try:
             os.makedirs(stransf_dir)
@@ -754,11 +757,14 @@ def _build_parcellation(fssubj_dir, subjid, growwm, out_dir, bool_mixwm, bool_rm
             else:
                 out_dir = temp
             
-            
+        
+        subjid_ent = subjid.split('_')
+        subj_id = subjid_ent[0]
+        ses_id = subjid_ent[1]
 
-        surfatlas_dir = os.path.join(out_dir, cort_dict["OutSurfLocation"], subjid, 'anat')
-        volatlas_dir  = os.path.join(out_dir, cort_dict["OutVolLocation"], subjid, 'anat')
-        volthal_dir   = os.path.join(out_dir, 'volparc-mialthal', subjid, 'anat')
+        surfatlas_dir = os.path.join(out_dir, cort_dict["OutSurfLocation"], subj_id, ses_id, 'anat')
+        volatlas_dir  = os.path.join(out_dir, cort_dict["OutVolLocation"], subj_id, ses_id, 'anat')
+        volthal_dir   = os.path.join(out_dir, 'volparc-mialthal', subj_id, ses_id, 'anat')
         
         if not os.path.isdir(surfatlas_dir):
             try:
@@ -854,10 +860,6 @@ def _build_parcellation(fssubj_dir, subjid, growwm, out_dir, bool_mixwm, bool_rm
         if len(out_sparc) != len(atlas_names)*2:
             print(f"The selected cortical parcellation ({cort_dict['Atlas']}) is not available for subject {subjid}")
             print("Trying to compute the corresponding cortical parcellation.")
-
-            #  Get the location of the current python file
-
-
 
             # Creating the link for fsaverage
             fsave_dir = os.path.join(fshome_dir, 'subjects', 'fsaverage')
@@ -1027,6 +1029,7 @@ def _build_parcellation(fssubj_dir, subjid, growwm, out_dir, bool_mixwm, bool_rm
         # Creating ouput directory
 
         # Loop around each parcellation
+        out_parc = []
         for i in np.arange(0, len(rh_cparc)):
             right_sdata = nib.freesurfer.io.read_annot(rh_cparc[i], orig_ids=False)
             rh_codes = right_sdata[0]
@@ -1146,56 +1149,8 @@ def _build_parcellation(fssubj_dir, subjid, growwm, out_dir, bool_mixwm, bool_rm
                                                                                 255 - lh_colors[roi_pos, 2], 0))
 
             for gparc in grow_parcs:
-
-                # Reading the cortical parcellation
-                temp_iparc = nib.load(gparc)
-                affine = temp_iparc.affine
-                temp_iparc = temp_iparc.get_fdata()
-
-                out_atlas = np.zeros(np.shape(temp_iparc), dtype='int16')
-
-                # Adding cortical regions (Right Hemisphere)
-
-                ind = np.where(np.logical_and(temp_iparc > 2000, temp_iparc < 3000))
-                out_atlas[ind[0], ind[1], ind[2]] = temp_iparc[ind[0], ind[1], ind[2]] - np.ones((len(ind[0]),)) * 2000
-
-                # Adding the rest of the regions (Right Hemisphere)
-                ind = np.where(outparc_rh > 0)
-                out_atlas[ind[0], ind[1], ind[2]] = outparc_rh[ind[0], ind[1], ind[2]] + np.ones((len(ind[0]),)) * nctx_rh
-
-                # Adding cortical regions (Left Hemisphere)
-                ind = np.where(np.logical_and(temp_iparc > 1000, temp_iparc < 2000))
-                out_atlas[ind[0], ind[1], ind[2]] = temp_iparc[ind[0], ind[1], ind[2]] - np.ones(
-                    (len(ind[0]),)) * 1000 + np.ones(
-                    (len(ind[0]),)) * nroi_right
-
-                # Adding the rest of the regions (Left Hemisphere + Brainstem)
-                ind = np.where(outparc_lh > 0)
-                out_atlas[ind[0], ind[1], ind[2]] = outparc_lh[ind[0], ind[1], ind[2]] + np.ones(
-                    (len(ind[0]),)) * nctx_lh + np.ones((len(ind[0]),)) * nroi_right
-
-                # Adding global white matter
-                bool_ind = np.in1d(temp_iparc, wm_codes)
-                bool_ind = np.reshape(bool_ind, np.shape(temp_iparc))
-                ind      = np.where(bool_ind)
-                out_atlas[ind[0], ind[1], ind[2]] = 3000
-
-                # Adding right white matter
-                ind      = np.where(np.logical_and(temp_iparc > 4000, temp_iparc < 5000))
-                out_atlas[ind[0], ind[1], ind[2]] = temp_iparc[ind[0], ind[1], ind[2]] - np.ones((len(ind[0]),)) * 1000
-
-                # Adding left white matter
-                ind = np.where(np.logical_and(temp_iparc > 3000, temp_iparc < 4000))
-                out_atlas[ind[0], ind[1], ind[2]] = temp_iparc[ind[0], ind[1], ind[2]] + np.ones((len(ind[0]),)) * nroi_right
-
-                if  bool_mixwm:
-                    ind      = np.where(out_atlas > 3000)
-                    out_atlas[ind[0], ind[1], ind[2]] = out_atlas[ind[0], ind[1], ind[2]] - 3000
-
-                if  bool_rmwm:
-                    ind      = np.where(out_atlas == 3000)
-                    out_atlas[ind[0], ind[1], ind[2]] = out_atlas[ind[0], ind[1], ind[2]] - 3000
-
+                
+                
                 fname            = os.path.basename(gparc)
                 templist         = fname.split('_')
                 tempVar          = [s for s in templist if "desc-" in s]  # Left cortical parcellation
@@ -1208,30 +1163,98 @@ def _build_parcellation(fssubj_dir, subjid, growwm, out_dir, bool_mixwm, bool_rm
 
                 # Saving the parcellation
                 outparcFilename = os.path.join(volatlas_dir, '_'.join(base_id) + '_dseg.nii.gz')
-                imgcoll          = nib.Nifti1Image(out_atlas.astype('int16') , affine)
-                nib.save(imgcoll, outparcFilename)
 
-                # Saving the colorLUT
-                colorlutFilename = os.path.join(volatlas_dir, '_'.join(base_id) + '_dseg.lut')
+                if not os.path.isfile(outparcFilename):
+                    # Reading the cortical parcellation
+                    temp_iparc = nib.load(gparc)
+                    affine = temp_iparc.affine
+                    temp_iparc = temp_iparc.get_fdata()
 
-                now              = datetime.now()
-                date_time        = now.strftime("%m/%d/%Y, %H:%M:%S")
-                time_lines       = ['# $Id: {} {} \n'.format(colorlutFilename, date_time),
-                                    '# Corresponding parcellation: ',
-                                    '# ' + outparcFilename + '\n']
+                    out_atlas = np.zeros(np.shape(temp_iparc), dtype='uint32')
 
-                hdr_lines        = ['{:<4} {:<40} {:>3} {:>3} {:>3} {:>3}'.format("#No.", "Label Name:", "R", "G", "B", "A")]
-                lut_lines        = time_lines + parc_desc_lines + hdr_lines + rh_luttable + lh_luttable + wm_luttable
-                with open(colorlutFilename, 'w') as colorLUT_f:
-                    colorLUT_f.write('\n'.join(lut_lines))
+                    # Adding cortical regions (Right Hemisphere)
 
-                st_codes_lut, st_names_lut, st_colors_lut = read_fscolorlut(colorlutFilename)
+                    ind = np.where(np.logical_and(temp_iparc > 2000, temp_iparc < 3000))
+                    out_atlas[ind[0], ind[1], ind[2]] = temp_iparc[ind[0], ind[1], ind[2]] - np.ones((len(ind[0]),)) * 2000
 
-                # Saving the TSV
-                tsvFilename = os.path.join(volatlas_dir, '_'.join(base_id) + '_dseg.tsv')
-                _parc_tsv_table(st_codes_lut, st_names_lut, st_colors_lut, tsvFilename)
+                    # Adding the rest of the regions (Right Hemisphere)
+                    ind = np.where(outparc_rh > 0)
+                    out_atlas[ind[0], ind[1], ind[2]] = outparc_rh[ind[0], ind[1], ind[2]] + np.ones((len(ind[0]),)) * nctx_rh
 
-                os.remove(gparc)
+                    # Adding cortical regions (Left Hemisphere)
+                    ind = np.where(np.logical_and(temp_iparc > 1000, temp_iparc < 2000))
+                    out_atlas[ind[0], ind[1], ind[2]] = temp_iparc[ind[0], ind[1], ind[2]] - np.ones(
+                        (len(ind[0]),)) * 1000 + np.ones(
+                        (len(ind[0]),)) * nroi_right
+
+                    # Adding the rest of the regions (Left Hemisphere + Brainstem)
+                    ind = np.where(outparc_lh > 0)
+                    out_atlas[ind[0], ind[1], ind[2]] = outparc_lh[ind[0], ind[1], ind[2]] + np.ones(
+                        (len(ind[0]),)) * nctx_lh + np.ones((len(ind[0]),)) * nroi_right
+
+                    # Adding global white matter
+                    bool_ind = np.in1d(temp_iparc, wm_codes)
+                    bool_ind = np.reshape(bool_ind, np.shape(temp_iparc))
+                    ind      = np.where(bool_ind)
+                    out_atlas[ind[0], ind[1], ind[2]] = 3000
+
+                    # Adding right white matter
+                    ind      = np.where(np.logical_and(temp_iparc > 4000, temp_iparc < 5000))
+                    out_atlas[ind[0], ind[1], ind[2]] = temp_iparc[ind[0], ind[1], ind[2]] - np.ones((len(ind[0]),)) * 1000
+
+                    # Adding left white matter
+                    ind = np.where(np.logical_and(temp_iparc > 3000, temp_iparc < 4000))
+                    out_atlas[ind[0], ind[1], ind[2]] = temp_iparc[ind[0], ind[1], ind[2]] + np.ones((len(ind[0]),)) * nroi_right
+
+                    if  bool_mixwm:
+                        ind      = np.where(out_atlas > 3000)
+                        out_atlas[ind[0], ind[1], ind[2]] = out_atlas[ind[0], ind[1], ind[2]] - 3000
+
+                    if  bool_rmwm:
+                        ind      = np.where(out_atlas == 3000)
+                        out_atlas[ind[0], ind[1], ind[2]] = out_atlas[ind[0], ind[1], ind[2]] - 3000
+
+                    # fname            = os.path.basename(gparc)
+                    # templist         = fname.split('_')
+                    # tempVar          = [s for s in templist if "desc-" in s]  # Left cortical parcellation
+                    # descid           = tempVar[0].split('-')[1]
+
+                    # base_id = subjid.split('_')
+                    # base_id.append('space-orig')
+                    # base_id.append('atlas-' + 'ctxLaus2018thalMIAL')
+                    # base_id.append('desc-' + descid)
+
+                    # # Saving the parcellation
+                    # outparcFilename = os.path.join(volatlas_dir, '_'.join(base_id) + '_dseg.nii.gz')
+                    imgcoll          = nib.Nifti1Image(out_atlas.astype('int16') , affine)
+                    nib.save(imgcoll, outparcFilename)
+
+                    # Saving the colorLUT
+                    colorlutFilename = os.path.join(volatlas_dir, '_'.join(base_id) + '_dseg.lut')
+
+                    now              = datetime.now()
+                    date_time        = now.strftime("%m/%d/%Y, %H:%M:%S")
+                    time_lines       = ['# $Id: {} {} \n'.format(colorlutFilename, date_time),
+                                        '# Corresponding parcellation: ',
+                                        '# ' + outparcFilename + '\n']
+
+                    hdr_lines        = ['{:<4} {:<40} {:>3} {:>3} {:>3} {:>3}'.format("#No.", "Label Name:", "R", "G", "B", "A")]
+                    lut_lines        = time_lines + parc_desc_lines + hdr_lines + rh_luttable + lh_luttable + wm_luttable
+                    with open(colorlutFilename, 'w') as colorLUT_f:
+                        colorLUT_f.write('\n'.join(lut_lines))
+
+                    st_codes_lut, st_names_lut, st_colors_lut = read_fscolorlut(colorlutFilename)
+
+                    # Saving the TSV
+                    tsvFilename = os.path.join(volatlas_dir, '_'.join(base_id) + '_dseg.tsv')
+                    _parc_tsv_table(st_codes_lut, st_names_lut, st_colors_lut, tsvFilename)
+
+                    os.remove(gparc)
+                
+                if os.path.isfile(outparcFilename):
+                    out_parc.append(outparcFilename)
+                    
+    return out_parc    
 
 
 def main():
