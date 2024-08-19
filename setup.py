@@ -31,7 +31,7 @@ setup(
     description="This tool was created to parcellate T1-weighted images using the Lausanne 2018 multi-scale cortical atlas and the thalamic nuclei atlas",
     entry_points={
         'console_scripts': [
-            'indivbrainparcel=indivbrainparcel.cli:main',
+            'indivbrainparcel=indivbrainparcel:main',
         ],
     },
     install_requires=requirements,
@@ -41,6 +41,7 @@ setup(
     keywords='indivbrainparcel',
     name='indivbrainparcel',
     packages=find_packages(include=['indivbrainparcel', 'indivbrainparcel.*']),
+    package_data={'chimera' :['indivbrainparcel/data/*']},
     test_suite='tests',
     tests_require=test_requirements,
     url='https://github.com/yasseraleman/indivbrainparcel',
